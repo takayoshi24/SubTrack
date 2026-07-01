@@ -1,32 +1,89 @@
-# React + TypeScript + Vite
+# SubTrack
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Desktop app for tracking recurring subscriptions — costs, billing dates, and payment history.
 
-Currently, two official plugins are available:
+## Prerequisites
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- [Node.js](https://nodejs.org/) 20+
+- [Rust](https://rustup.rs/) 1.77.2+ (includes `cargo`)
+- Windows: [WebView2](https://developer.microsoft.com/en-us/microsoft-edge/webview2/) (pre-installed on Windows 11; downloadable for Windows 10)
 
-## React Compiler
+Verify your setup:
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```bash
+node --version
+rustc --version
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+## Installation
+
+```bash
+git clone https://github.com/takayoshi24/SubTrack.git
+cd SubTrack
+npm install
+```
+
+## Running
+
+```bash
+npx tauri dev
+```
+
+This starts the Vite dev server and opens the desktop window. The first run compiles ~400 Rust crates and takes 3–5 minutes. Subsequent runs are fast.
+
+> **Windows + Conda**: if you get `cargo not found`, reload your PATH first:
+> ```powershell
+> $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH","User")
+> ```
+> Then retry `npx tauri dev`.
+
+The database (`subtrack.db`) is created automatically on first launch in your OS app-data directory. Five sample subscriptions are loaded on a fresh database so you can explore immediately.
+
+## Features
+
+- **Dashboard** — monthly cost estimate, year-to-date spend, and all payments due in the next 30 days with a Mark Paid button
+- **Subscriptions** — add, edit, and cancel subscriptions; billing cycles: weekly, monthly, quarterly, yearly
+- **Price history** — updating a price closes the old record and opens a new one; historical totals stay accurate
+- **Payment history** — per-subscription log of payments and price changes
+
+## Project structure
+
+```
+src/
+├── components/
+│   ├── Dashboard.tsx           Upcoming payments and spend stats
+│   ├── SubscriptionsView.tsx   Subscription card grid
+│   ├── SubscriptionForm.tsx    Add / edit modal
+│   └── PaymentHistoryModal.tsx Payment and price history tabs
+├── db.ts                       All SQLite operations
+├── utils/billing.ts            Billing date computation and formatting
+├── types.ts                    TypeScript interfaces
+└── App.tsx                     Root layout and navigation
+
+src-tauri/
+├── src/lib.rs                  Tauri app entry — registers SQL plugin
+├── tauri.conf.json             App config (name, window size, bundle id)
+└── Cargo.toml                  Rust dependencies
+```
+
+## Database schema
+
+```sql
+subscriptions       (id, name, owner, cycle, anchor_date, cancelled_at)
+subscription_prices (id, subscription_id, amount, valid_from, valid_to)
+payments            (id, subscription_id, amount, due_date, paid_date, status)
+```
+
+Billing dates are always computed from `anchor_date`, never from the last payment. Month-end clamping preserves the original anchor day (a subscription starting Jan 31 bills on Feb 28 but snaps back to Mar 31).
+
+## Build for production
+
+```bash
+npx tauri build
+```
+
+Produces a signed installer in `src-tauri/target/release/bundle/`.
+
+## License
+
+MIT
