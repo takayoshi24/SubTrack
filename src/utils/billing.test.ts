@@ -82,6 +82,19 @@ describe('getNextBillingDate', () => {
     const today = new Date('2024-04-15T00:00:00');
     expect(getNextBillingDate('2024-01-15', 'quarterly', today)).toEqual(new Date(2024, 3, 15));
   });
+
+  it('computes the correct weekly date for an anchor years in the past (non-billing day)', () => {
+    // anchor 2020-01-06 (Mon), from 2026-07-01 (Wed) — ~338 weeks elapsed
+    // next billing Monday after Jul 1 is Jul 6
+    const result = getNextBillingDate('2020-01-06', 'weekly', new Date('2026-07-01T00:00:00'));
+    expect(result).toEqual(new Date(2026, 6, 6));
+  });
+
+  it('computes the correct weekly date for an anchor years in the past (billing day)', () => {
+    // anchor 2020-01-06 (Mon), from 2026-06-29 (Mon) — billing day
+    const result = getNextBillingDate('2020-01-06', 'weekly', new Date('2026-06-29T00:00:00'));
+    expect(result).toEqual(new Date(2026, 5, 29));
+  });
 });
 
 describe('normalizeToMonthly', () => {
