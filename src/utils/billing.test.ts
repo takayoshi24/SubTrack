@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import { getNextBillingDate, toISODate, formatCurrency, daysUntil, normalizeToMonthly } from './billing';
+import type { SubWithPrice } from '../types';
+import { getNextBillingDate, toISODate, formatCurrency, daysUntil, normalizeToMonthly, monthlyTotal } from './billing';
 
 describe('toISODate', () => {
   it('returns the local calendar date, not the UTC date', () => {
@@ -122,6 +123,34 @@ describe('formatCurrency', () => {
 
   it('formats cents correctly', () => {
     expect(formatCurrency(9.99)).toBe('$9.99');
+  });
+});
+
+describe('monthlyTotal', () => {
+  const makeSub = (id: number, cycle: SubWithPrice['cycle'], amount: number): SubWithPrice => ({
+    id, name: `Sub${id}`, owner: '', cycle, anchor_date: '2026-01-01',
+    cancelled_at: null, current_amount: amount, next_due: '2026-07-01',
+  });
+
+  it('returns 0 for an empty list', () => {
+    expect(monthlyTotal([])).toBe(0);
+  });
+
+  it('passes through a single monthly subscription unchanged', () => {
+    expect(monthlyTotal([makeSub(1, 'monthly', 10)])).toBe(10);
+  });
+
+  it('normalises a yearly subscription to monthly (÷12)', () => {
+    expect(monthlyTotal([makeSub(1, 'yearly', 120)])).toBeCloseTo(10);
+  });
+
+  it('sums mixed cycles correctly', () => {
+    const subs = [
+      makeSub(1, 'monthly', 10),   // 10/mo
+      makeSub(2, 'yearly', 120),   // 10/mo
+      makeSub(3, 'quarterly', 30), // 10/mo
+    ];
+    expect(monthlyTotal(subs)).toBeCloseTo(30);
   });
 });
 

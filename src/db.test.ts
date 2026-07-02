@@ -17,7 +17,8 @@ vi.mock('@tauri-apps/plugin-sql', () => ({
   },
 }));
 
-import { updatePrice, getYearTotal, getUpcomingPayments } from './db';
+import type { SubWithPrice } from './types';
+import { updatePrice, getSubscriptions, getYearTotal, getUpcomingPayments } from './db';
 
 describe('updatePrice', () => {
   beforeAll(async () => {
@@ -98,10 +99,53 @@ describe('getYearTotal', () => {
   });
 });
 
-describe('getUpcomingPayments', () => {
+describe('getSubscriptions', () => {
   // Anchor 2026-01-06 monthly → next_due 2026-07-06 when today is 2026-07-02.
-  const SUB = { id: 1, name: 'Netflix', owner: 'Me', cycle: 'monthly', anchor_date: '2026-01-06', cancelled_at: null };
-  const PRICE = [{ amount: 15, valid_to: null }];
+  const JOINED_ROW = {
+    id: 1, name: 'Netflix', owner: 'Me', cycle: 'monthly',
+    anchor_date: '2026-01-06', cancelled_at: null, current_amount: 15,
+  };
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-07-02T00:00:00'));
+    mockSelect.mockReset();
+    mockSelect.mockResolvedValue([]);
+    mockExecute.mockReset();
+    mockExecute.mockResolvedValue({ rowsAffected: 1, lastInsertId: 1 });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('issues a single SELECT for N subscriptions (no N+1 price queries)', async () => {
+    mockSelect.mockResolvedValueOnce([JOINED_ROW]);
+
+    const result = await getSubscriptions();
+
+    expect(mockSelect).toHaveBeenCalledTimes(1);
+    expect(result).toHaveLength(1);
+    expect(result[0].current_amount).toBe(15);
+    expect(result[0].next_due).toBe('2026-07-06');
+  });
+
+  it('uses LEFT JOIN in the query so subscriptions without a price row are included', async () => {
+    mockSelect.mockResolvedValueOnce([{ ...JOINED_ROW, current_amount: null }]);
+
+    const result = await getSubscriptions();
+
+    expect(mockSelect.mock.calls[0][0]).toMatch(/LEFT JOIN/i);
+    expect(result[0].current_amount).toBe(0);
+  });
+});
+
+describe('getUpcomingPayments', () => {
+  // Subs are now passed in — no subscription queries inside getUpcomingPayments.
+  const SUBS: SubWithPrice[] = [
+    { id: 1, name: 'Netflix', owner: 'Me', cycle: 'monthly',
+      anchor_date: '2026-01-06', cancelled_at: null, current_amount: 15, next_due: '2026-07-06' },
+  ];
 
   beforeEach(() => {
     vi.useFakeTimers();
@@ -117,35 +161,29 @@ describe('getUpcomingPayments', () => {
   });
 
   it('includes a subscription whose next due date has not been paid', async () => {
-    mockSelect
-      .mockResolvedValueOnce([SUB])   // getSubscriptions: all subs
-      .mockResolvedValueOnce(PRICE)   // getSubscriptions: price for sub 1
-      .mockResolvedValueOnce([]);     // getUpcomingPayments: paid dates (none)
+    mockSelect.mockResolvedValueOnce([]); // paid dates query returns nothing
 
-    const result = await getUpcomingPayments(30);
+    const result = await getUpcomingPayments(SUBS, 30);
     expect(result).toHaveLength(1);
     expect(result[0].due_date).toBe('2026-07-06');
   });
 
   it('excludes a subscription whose next due date is already paid', async () => {
-    mockSelect
-      .mockResolvedValueOnce([SUB])
-      .mockResolvedValueOnce(PRICE)
-      .mockResolvedValueOnce([{ subscription_id: 1, due_date: '2026-07-06' }]); // already paid
+    mockSelect.mockResolvedValueOnce([{ subscription_id: 1, due_date: '2026-07-06' }]);
 
-    const result = await getUpcomingPayments(30);
+    const result = await getUpcomingPayments(SUBS, 30);
     expect(result).toHaveLength(0);
   });
 
   it('only excludes the matching subscription when multiple exist', async () => {
-    const SUB2 = { id: 2, name: 'Spotify', owner: 'Me', cycle: 'monthly', anchor_date: '2026-01-10', cancelled_at: null };
-    mockSelect
-      .mockResolvedValueOnce([SUB, SUB2])
-      .mockResolvedValueOnce(PRICE)          // price for sub 1
-      .mockResolvedValueOnce(PRICE)          // price for sub 2
-      .mockResolvedValueOnce([{ subscription_id: 1, due_date: '2026-07-06' }]); // only sub 1 paid
+    const SUBS2: SubWithPrice[] = [
+      ...SUBS,
+      { id: 2, name: 'Spotify', owner: 'Me', cycle: 'monthly',
+        anchor_date: '2026-01-10', cancelled_at: null, current_amount: 10, next_due: '2026-07-10' },
+    ];
+    mockSelect.mockResolvedValueOnce([{ subscription_id: 1, due_date: '2026-07-06' }]);
 
-    const result = await getUpcomingPayments(30);
+    const result = await getUpcomingPayments(SUBS2, 30);
     expect(result).toHaveLength(1);
     expect(result[0].subscription_id).toBe(2);
   });

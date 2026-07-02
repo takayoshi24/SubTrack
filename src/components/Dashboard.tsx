@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { UpcomingPayment } from '../types';
-import { getUpcomingPayments, getMonthlyTotal, getYearTotal, logPayment } from '../db';
-import { formatCurrency, formatDate, daysUntil } from '../utils/billing';
+import { getSubscriptions, getUpcomingPayments, getYearTotal, logPayment } from '../db';
+import { formatCurrency, formatDate, daysUntil, monthlyTotal } from '../utils/billing';
 
 interface Props {
   onRefresh: () => void;
@@ -10,13 +10,15 @@ interface Props {
 
 export default function Dashboard({ onRefresh, refreshKey }: Props) {
   const [upcoming, setUpcoming] = useState<UpcomingPayment[]>([]);
-  const [monthlyTotal, setMonthlyTotal] = useState(0);
+  const [monthlyCost, setMonthlyCost] = useState(0);
   const [yearTotal, setYearTotal] = useState(0);
   const [paying, setPaying] = useState<number | null>(null);
 
   useEffect(() => {
-    getUpcomingPayments(30).then(setUpcoming);
-    getMonthlyTotal().then(setMonthlyTotal);
+    getSubscriptions().then((subs) => {
+      setMonthlyCost(monthlyTotal(subs));
+      getUpcomingPayments(subs, 30).then(setUpcoming);
+    });
     getYearTotal(new Date().getFullYear()).then(setYearTotal);
   }, [refreshKey]);
 
@@ -32,7 +34,7 @@ export default function Dashboard({ onRefresh, refreshKey }: Props) {
       <div className="stats-row">
         <div className="stat-card">
           <span className="stat-label">Monthly Cost</span>
-          <span className="stat-value">{formatCurrency(monthlyTotal)}</span>
+          <span className="stat-value">{formatCurrency(monthlyCost)}</span>
         </div>
         <div className="stat-card">
           <span className="stat-label">{new Date().getFullYear()} Spent</span>

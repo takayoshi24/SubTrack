@@ -7,7 +7,7 @@ import type {
   SubWithPrice,
   UpcomingPayment,
 } from './types';
-import { getNextBillingDate, toISODate, normalizeToMonthly } from './utils/billing';
+import { getNextBillingDate, toISODate } from './utils/billing';
 
 let _dbPromise: Promise<Database> | null = null;
 
@@ -56,20 +56,19 @@ async function initSchema(db: Database): Promise<void> {
 
 export async function getSubscriptions(): Promise<SubWithPrice[]> {
   const db = await getDb();
-  const subs = await db.select<Subscription[]>(
-    `SELECT * FROM subscriptions WHERE cancelled_at IS NULL ORDER BY name`
+  const rows = await db.select<(Subscription & { current_amount: number | null })[]>(
+    `SELECT s.*, sp.amount AS current_amount
+     FROM subscriptions s
+     LEFT JOIN subscription_prices sp
+       ON sp.subscription_id = s.id AND sp.valid_to IS NULL
+     WHERE s.cancelled_at IS NULL
+     ORDER BY s.name`
   );
-  return Promise.all(
-    subs.map(async (sub) => {
-      const prices = await db.select<SubscriptionPrice[]>(
-        `SELECT * FROM subscription_prices WHERE subscription_id = ? AND valid_to IS NULL LIMIT 1`,
-        [sub.id]
-      );
-      const current_amount = prices[0]?.amount ?? 0;
-      const next_due = toISODate(getNextBillingDate(sub.anchor_date, sub.cycle as BillingCycle));
-      return { ...sub, current_amount, next_due };
-    })
-  );
+  return rows.map((row) => ({
+    ...row,
+    current_amount: row.current_amount ?? 0,
+    next_due: toISODate(getNextBillingDate(row.anchor_date, row.cycle as BillingCycle)),
+  }));
 }
 
 export async function addSubscription(
@@ -172,9 +171,8 @@ export async function getPriceHistory(subscriptionId: number): Promise<Subscript
   );
 }
 
-export async function getUpcomingPayments(days: number = 30): Promise<UpcomingPayment[]> {
+export async function getUpcomingPayments(subs: SubWithPrice[], days: number = 30): Promise<UpcomingPayment[]> {
   const db = await getDb();
-  const subs = await getSubscriptions();
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() + days);
 
@@ -193,14 +191,6 @@ export async function getUpcomingPayments(days: number = 30): Promise<UpcomingPa
       due_date: sub.next_due,
     }))
     .sort((a, b) => a.due_date.localeCompare(b.due_date));
-}
-
-export async function getMonthlyTotal(): Promise<number> {
-  const subs = await getSubscriptions();
-  return subs.reduce(
-    (sum, sub) => sum + normalizeToMonthly(sub.current_amount, sub.cycle as BillingCycle),
-    0
-  );
 }
 
 export async function getYearTotal(year: number): Promise<number> {

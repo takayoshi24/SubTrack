@@ -1,4 +1,4 @@
-import type { BillingCycle } from '../types';
+import type { BillingCycle, SubWithPrice } from '../types';
 
 function lastDayOfMonth(year: number, month: number): number {
   return new Date(year, month + 1, 0).getDate();
@@ -68,4 +68,8 @@ export function normalizeToMonthly(amount: number, cycle: BillingCycle): number 
     yearly: 1 / 12,
   };
   return amount * multipliers[cycle];
+}
+
+export function monthlyTotal(subs: SubWithPrice[]): number {
+  return subs.reduce((sum, sub) => sum + normalizeToMonthly(sub.current_amount, sub.cycle), 0);
 }
