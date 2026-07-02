@@ -47,10 +47,10 @@ describe('getNextBillingDate', () => {
   });
 
   it('returns next weekly billing date after today', () => {
-    // anchor 2024-01-15 (Monday), from 2024-06-03 (Monday)
-    const weeklyFrom = new Date('2024-06-03T00:00:00');
+    // anchor 2024-01-15 (Monday), from 2024-06-04 (Tuesday)
+    const weeklyFrom = new Date('2024-06-04T00:00:00');
     const result = getNextBillingDate('2024-01-15', 'weekly', weeklyFrom);
-    // next Monday after Jun 3 is Jun 10
+    // next billing Monday after Jun 4 (Tue) is Jun 10
     expect(result).toEqual(new Date(2024, 5, 10));
   });
 
@@ -58,6 +58,29 @@ describe('getNextBillingDate', () => {
     // anchor Jan 31 — Feb billing should be Feb 28 (2024 is a leap year → Feb 29)
     const result = getNextBillingDate('2024-01-31', 'monthly', new Date('2024-02-01T00:00:00'));
     expect(result).toEqual(new Date(2024, 1, 29)); // Feb 29, 2024 (leap year)
+  });
+
+  it('returns today when a monthly billing date falls on today', () => {
+    // anchor Jun 15 → billing dates include Jul 15; from = Jul 15 (today)
+    const today = new Date('2024-07-15T00:00:00');
+    expect(getNextBillingDate('2024-06-15', 'monthly', today)).toEqual(new Date(2024, 6, 15));
+  });
+
+  it('returns today when a weekly billing date falls on today', () => {
+    // anchor Mon Jan 15 → recurring every Monday; from = Mon Jun 3
+    const today = new Date('2024-06-03T00:00:00');
+    expect(getNextBillingDate('2024-01-15', 'weekly', today)).toEqual(new Date(2024, 5, 3));
+  });
+
+  it('returns today when a yearly billing date falls on today', () => {
+    const today = new Date('2024-01-15T00:00:00');
+    expect(getNextBillingDate('2024-01-15', 'yearly', today)).toEqual(new Date(2024, 0, 15));
+  });
+
+  it('returns today when a quarterly billing date falls on today', () => {
+    // anchor Jan 15 → quarters: Jan 15, Apr 15, Jul 15; from = Apr 15
+    const today = new Date('2024-04-15T00:00:00');
+    expect(getNextBillingDate('2024-01-15', 'quarterly', today)).toEqual(new Date(2024, 3, 15));
   });
 });
 
