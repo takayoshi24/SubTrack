@@ -13,7 +13,7 @@ export function getNextBillingDate(anchorDate: string, cycle: BillingCycle, from
 
   if (cycle === 'weekly') {
     let candidate = new Date(anchor);
-    while (candidate <= today) {
+    while (candidate < today) {
       candidate.setDate(candidate.getDate() + 7);
     }
     return candidate;
@@ -28,7 +28,7 @@ export function getNextBillingDate(anchorDate: string, cycle: BillingCycle, from
     const month = totalMonths % 12;
     const day = Math.min(anchorDay, lastDayOfMonth(year, month));
     const candidate = new Date(year, month, day);
-    if (candidate > today) return candidate;
+    if (candidate >= today) return candidate;
     n++;
   }
 }
