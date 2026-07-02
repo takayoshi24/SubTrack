@@ -28,7 +28,7 @@ async function initSchema(db: Database): Promise<void> {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
       owner TEXT NOT NULL,
-      cycle TEXT NOT NULL,
+      cycle TEXT NOT NULL CHECK(cycle IN ('weekly','monthly','quarterly','yearly')),
       anchor_date TEXT NOT NULL,
       cancelled_at TEXT
     )

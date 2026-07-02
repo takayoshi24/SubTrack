@@ -20,6 +20,7 @@ export function getNextBillingDate(anchorDate: string, cycle: BillingCycle, from
   }
 
   const cycleMonths = { monthly: 1, quarterly: 3, yearly: 12 }[cycle];
+  if (cycleMonths === undefined) throw new Error(`Unknown billing cycle: ${cycle}`);
   let n = 0;
   while (true) {
     const totalMonths = anchorMonth + n * cycleMonths;
