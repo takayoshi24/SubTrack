@@ -12,11 +12,12 @@ export function getNextBillingDate(anchorDate: string, cycle: BillingCycle, from
   const today = new Date(from.getFullYear(), from.getMonth(), from.getDate());
 
   if (cycle === 'weekly') {
-    let candidate = new Date(anchor);
-    while (candidate < today) {
-      candidate.setDate(candidate.getDate() + 7);
-    }
-    return candidate;
+    // Round to nearest day before dividing so a DST ±1h shift doesn't skew the week count.
+    const elapsedDays = Math.round((today.getTime() - anchor.getTime()) / 86400000);
+    const weeksAhead = elapsedDays > 0 ? Math.ceil(elapsedDays / 7) : 0;
+    const result = new Date(anchor);
+    result.setDate(result.getDate() + weeksAhead * 7);
+    return result;
   }
 
   const cycleMonths = { monthly: 1, quarterly: 3, yearly: 12 }[cycle];
