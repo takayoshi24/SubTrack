@@ -173,12 +173,19 @@ export async function getPriceHistory(subscriptionId: number): Promise<Subscript
 }
 
 export async function getUpcomingPayments(days: number = 30): Promise<UpcomingPayment[]> {
+  const db = await getDb();
   const subs = await getSubscriptions();
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() + days);
 
+  const paidRows = await db.select<{ subscription_id: number; due_date: string }[]>(
+    `SELECT subscription_id, due_date FROM payments WHERE status = 'paid'`
+  );
+  const paidSet = new Set(paidRows.map((p) => `${p.subscription_id}:${p.due_date}`));
+
   return subs
     .filter((sub) => new Date(sub.next_due + 'T00:00:00') <= cutoff)
+    .filter((sub) => !paidSet.has(`${sub.id}:${sub.next_due}`))
     .map((sub) => ({
       subscription_id: sub.id,
       subscription_name: sub.name,
