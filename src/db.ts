@@ -52,6 +52,10 @@ async function initSchema(db: Database): Promise<void> {
       status TEXT NOT NULL DEFAULT 'scheduled'
     )
   `);
+  await db.execute(`
+    CREATE UNIQUE INDEX IF NOT EXISTS payments_sub_due
+      ON payments (subscription_id, due_date)
+  `);
 }
 
 export async function getSubscriptions(): Promise<SubWithPrice[]> {
@@ -138,21 +142,15 @@ export async function logPayment(
 ): Promise<void> {
   const db = await getDb();
   const today = toISODate(new Date());
-  const existing = await db.select<Payment[]>(
-    `SELECT * FROM payments WHERE subscription_id = ? AND due_date = ?`,
-    [subscriptionId, dueDate]
+  await db.execute(
+    `INSERT INTO payments (subscription_id, amount, due_date, paid_date, status)
+     VALUES (?, ?, ?, ?, 'paid')
+     ON CONFLICT(subscription_id, due_date) DO UPDATE SET
+       amount = excluded.amount,
+       paid_date = excluded.paid_date,
+       status = 'paid'`,
+    [subscriptionId, amount, dueDate, today]
   );
-  if (existing.length > 0) {
-    await db.execute(
-      `UPDATE payments SET paid_date = ?, status = 'paid', amount = ? WHERE id = ?`,
-      [today, amount, existing[0].id]
-    );
-  } else {
-    await db.execute(
-      `INSERT INTO payments (subscription_id, amount, due_date, paid_date, status) VALUES (?, ?, ?, ?, 'paid')`,
-      [subscriptionId, amount, dueDate, today]
-    );
-  }
 }
 
 export async function getPaymentHistory(subscriptionId: number): Promise<Payment[]> {

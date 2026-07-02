@@ -18,7 +18,7 @@ vi.mock('@tauri-apps/plugin-sql', () => ({
 }));
 
 import type { SubWithPrice } from './types';
-import { updatePrice, getSubscriptions, getYearTotal, getUpcomingPayments } from './db';
+import { updatePrice, getSubscriptions, getYearTotal, getUpcomingPayments, logPayment } from './db';
 
 describe('updatePrice', () => {
   beforeAll(async () => {
@@ -186,5 +186,39 @@ describe('getUpcomingPayments', () => {
     const result = await getUpcomingPayments(SUBS2, 30);
     expect(result).toHaveLength(1);
     expect(result[0].subscription_id).toBe(2);
+  });
+});
+
+describe('logPayment', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-07-02T00:00:00'));
+    mockExecute.mockReset();
+    mockExecute.mockResolvedValue({ rowsAffected: 1, lastInsertId: 1 });
+    mockSelect.mockReset();
+    mockSelect.mockResolvedValue([]);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('uses a single atomic upsert — no SELECT before INSERT', async () => {
+    await logPayment(1, 15, '2026-07-06');
+
+    expect(mockSelect).not.toHaveBeenCalled();
+    const sqls = mockExecute.mock.calls.map((c) => c[0] as string);
+    expect(sqls).toHaveLength(1);
+    expect(sqls[0]).toMatch(/ON CONFLICT/i);
+  });
+
+  it('concurrent calls both use the upsert SQL (safe under double-click)', async () => {
+    await Promise.all([
+      logPayment(1, 15, '2026-07-06'),
+      logPayment(1, 15, '2026-07-06'),
+    ]);
+
+    const sqls = mockExecute.mock.calls.map((c) => c[0] as string);
+    expect(sqls.every((sql) => /ON CONFLICT/i.test(sql))).toBe(true);
   });
 });
