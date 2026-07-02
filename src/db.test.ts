@@ -4,16 +4,20 @@ const mockExecute = vi.hoisted(() =>
   vi.fn().mockResolvedValue({ rowsAffected: 1, lastInsertId: 1 })
 );
 
+const mockSelect = vi.hoisted(() =>
+  vi.fn().mockResolvedValue([])
+);
+
 vi.mock('@tauri-apps/plugin-sql', () => ({
   default: {
     load: vi.fn().mockResolvedValue({
       execute: mockExecute,
-      select: vi.fn().mockResolvedValue([]),
+      select: mockSelect,
     }),
   },
 }));
 
-import { updatePrice } from './db';
+import { updatePrice, getYearTotal } from './db';
 
 describe('updatePrice', () => {
   beforeAll(async () => {
@@ -61,5 +65,35 @@ describe('updatePrice', () => {
     const sqls = mockExecute.mock.calls.map((c) => c[0] as string);
     expect(sqls).toContain('ROLLBACK');
     expect(sqls).not.toContain('COMMIT');
+  });
+});
+
+describe('getYearTotal', () => {
+  beforeEach(() => {
+    mockSelect.mockReset();
+    mockSelect.mockResolvedValue([{ total: 0 }]);
+  });
+
+  it('filters by paid_date year, not due_date year', async () => {
+    await getYearTotal(2026);
+    const sql = mockSelect.mock.calls[0][0] as string;
+    expect(sql).toMatch(/paid_date/);
+    expect(sql).not.toMatch(/due_date/);
+  });
+
+  it('returns the total from the query result', async () => {
+    mockSelect.mockResolvedValue([{ total: 250.5 }]);
+    const result = await getYearTotal(2026);
+    expect(result).toBe(250.5);
+  });
+
+  it('returns 0 when no paid payments exist for the year', async () => {
+    mockSelect.mockResolvedValue([{ total: 0 }]);
+    expect(await getYearTotal(2025)).toBe(0);
+  });
+
+  it('passes the year as a string to the query', async () => {
+    await getYearTotal(2026);
+    expect(mockSelect.mock.calls[0][1]).toEqual(['2026']);
   });
 });

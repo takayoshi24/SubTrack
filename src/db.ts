@@ -199,7 +199,7 @@ export async function getMonthlyTotal(): Promise<number> {
 export async function getYearTotal(year: number): Promise<number> {
   const db = await getDb();
   const result = await db.select<{ total: number }[]>(
-    `SELECT COALESCE(SUM(amount), 0) as total FROM payments WHERE status = 'paid' AND strftime('%Y', due_date) = ?`,
+    `SELECT COALESCE(SUM(amount), 0) as total FROM payments WHERE status = 'paid' AND paid_date IS NOT NULL AND strftime('%Y', paid_date) = ?`,
     [String(year)]
   );
   return result[0]?.total ?? 0;
