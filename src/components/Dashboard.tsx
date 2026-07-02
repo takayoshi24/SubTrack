@@ -24,9 +24,14 @@ export default function Dashboard({ onRefresh, refreshKey }: Props) {
 
   async function handleMarkPaid(payment: UpcomingPayment) {
     setPaying(payment.subscription_id);
-    await logPayment(payment.subscription_id, payment.amount, payment.due_date);
-    setPaying(null);
-    onRefresh();
+    try {
+      await logPayment(payment.subscription_id, payment.amount, payment.due_date);
+      onRefresh();
+    } catch (err) {
+      console.error('Failed to mark payment:', err);
+    } finally {
+      setPaying(null);
+    }
   }
 
   return (
