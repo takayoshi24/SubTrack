@@ -1,5 +1,22 @@
-import { describe, it, expect } from 'vitest';
-import { getNextBillingDate, formatCurrency, daysUntil, normalizeToMonthly } from './billing';
+import { describe, it, expect, vi } from 'vitest';
+import { getNextBillingDate, toISODate, formatCurrency, daysUntil, normalizeToMonthly } from './billing';
+
+describe('toISODate', () => {
+  it('returns the local calendar date, not the UTC date', () => {
+    // Simulate a UTC+ scenario: local midnight is "yesterday" in UTC.
+    // new Date(2026, 6, 1) = July 1 at local midnight.
+    // In UTC+1, that moment is Jun 30 23:00 UTC, so toISOString() returns "2026-06-30...".
+    // We mock toISOString to reproduce this regardless of the test runner's timezone.
+    const d = new Date(2026, 6, 1);
+    vi.spyOn(d, 'toISOString').mockReturnValue('2026-06-30T23:00:00.000Z');
+
+    expect(toISODate(d)).toBe('2026-07-01');
+  });
+
+  it('zero-pads month and day', () => {
+    expect(toISODate(new Date(2026, 0, 5))).toBe('2026-01-05');
+  });
+});
 
 describe('getNextBillingDate', () => {
   const anchor = '2024-01-15';
