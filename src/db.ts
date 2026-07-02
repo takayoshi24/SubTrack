@@ -107,14 +107,21 @@ export async function updateSubscription(
 export async function updatePrice(subscriptionId: number, newAmount: number): Promise<void> {
   const db = await getDb();
   const today = toISODate(new Date());
-  await db.execute(
-    `UPDATE subscription_prices SET valid_to = ? WHERE subscription_id = ? AND valid_to IS NULL`,
-    [today, subscriptionId]
-  );
-  await db.execute(
-    `INSERT INTO subscription_prices (subscription_id, amount, valid_from) VALUES (?, ?, ?)`,
-    [subscriptionId, newAmount, today]
-  );
+  await db.execute('BEGIN');
+  try {
+    await db.execute(
+      `UPDATE subscription_prices SET valid_to = ? WHERE subscription_id = ? AND valid_to IS NULL`,
+      [today, subscriptionId]
+    );
+    await db.execute(
+      `INSERT INTO subscription_prices (subscription_id, amount, valid_from) VALUES (?, ?, ?)`,
+      [subscriptionId, newAmount, today]
+    );
+    await db.execute('COMMIT');
+  } catch (e) {
+    await db.execute('ROLLBACK');
+    throw e;
+  }
 }
 
 export async function cancelSubscription(id: number): Promise<void> {
